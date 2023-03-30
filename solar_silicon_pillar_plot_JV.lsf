@@ -1,0 +1,19 @@
+########################################################################
+# Plot the current density and photovoltaic efficiency
+#
+# (c) Lumerical Solutions
+########################################################################
+
+surface_area = getnamed("CHARGE simulation region","x span")*getnamed("CHARGE simulation region","y span");
+
+base = getresult("CHARGE","base");
+J_base = pinch( base.I )/surface_area;
+
+V_base = pinch( base.Vs );
+P = -J_base*V_base;  
+
+plot(V_base,J_base*0.1,"voltage (V)", "current density (mA/cm^2)");
+if (length(V_base) > 1) { # plot PV efficiency
+  plot(V_base,P*0.1,"voltage (V)", "power (mW/cm^2)");
+}
+

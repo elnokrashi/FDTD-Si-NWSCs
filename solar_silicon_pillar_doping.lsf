@@ -1,0 +1,134 @@
+########################################################################
+#
+# Generate the uniform conformal surface doping profile for a 
+# hexagonal pillar
+#
+# Inputs: 
+#  P - pitch (m)
+#  D - diameter (m)
+#  h_pillar - pillar height (m)
+#  zc - z location (centre) of pillar (m)
+#  zmin, zmax - range of doping profile data in z
+#  t_shell - doping shell thickness (m)
+#  t_substr - doping profile depth in Si substrate (m) (usually same as t_shell)
+#  NC - doping concentration (1/m3)
+#  filename - the output data file name
+#
+# (c) Lumerical Solutions
+########################################################################
+
+clear;
+
+#
+# Inputs
+#
+filename = 'shell_doping.mat';
+P = 0.53e-6;
+D = 0.39e-6;
+
+h_pillar = 5e-6;
+zc = 0;
+zmin = -4e-6;
+zmax = 3e-6;
+
+t_shell = 0.08e-6;
+t_substr = 0.08e-6;
+NC = 1e20*1e6;
+
+nedge = 20;    # number of points on an edge
+din = 0.01;    # ratio to shrink inner hexagon
+make_core = 0; # reverse the profile and make a uniform core doping
+
+#
+# Calculate hexagon profile
+# 
+py1 = 1;
+py2 = 0.5;
+hex_y_lo = [-py1; linspace(-py1+din,-py2-din,nedge);-py2];
+hex_y_hi = [ py2; linspace( py2+din, py1-din,nedge); py1];
+hex_y = [hex_y_lo; hex_y_hi];
+
+# y = mx + b, y(0) = m(0) + py1, x = (y - py1)/(py1-py2)
+xo = 0.5*sqrt(3)*(hex_y_hi - py1)/(py1-py2);
+
+# don't record first or last point (same as xo)
+xi = 0.5*sqrt(3)*(hex_y_hi(2:nedge) - py1+din)/(py1 - py2);
+
+io = 1; 
+ii = 1;
+xleft = matrix(length(xo)+length(xi),1);
+for (il = 1:length(xleft)) {
+  if (io <= length(xo)) { 
+   if (ii <= length(xi)) {
+    if (xo(io) < xi(ii)) {
+     xleft(il) = xo(io); io = io + 1;
+    } else {
+     xleft(il) = xi(ii); ii = ii + 1;
+    }
+   } else { 
+    xleft(il) = xo(io);   io = io + 1; 
+   }
+  } else { 
+   if (ii <= length(xi)) {
+    xleft(il) = xi(ii);   ii = ii + 1;
+   }
+  }
+}
+S = 0.5*D - t_shell;
+
+x1 = [-0.25*sqrt(3)*P; S*[xleft(1:(length(xleft)-1)); -flip(xleft,1)]; 0.25*sqrt(3)*P];
+y1 = [-0.5*P; S*hex_y; 0.5*P];
+
+nx1 = length(x1);
+ny1 = length(y1);
+
+#
+# Make a 2D mask for doping outside the core
+#
+
+N2d = matrix(nx1,ny1);
+N2d(1:nx1,1:ny1) = NC;
+for (iy = 1:ny1) { 
+  for (ix = 1:nx1) {
+    ax1 = abs(x1(ix));
+    if (ax1 < S*(0.5*sqrt(3)-0.5*din)) {
+     ay1 = abs(y1(iy)); 
+     if (ay1 < S*(py2+0.5*din)) {
+      N2d(ix,iy) = 0;
+     } else { 
+      if (ay1 < S*(py1-0.5*din)) {
+       m = -(py1-py2);
+       if ( ay1 - m*ax1 < S*(py1-0.5*din) ) {
+        N2d(ix,iy) = 0;
+       }
+      }
+     }
+    }
+  }
+}
+
+if (make_core == 1) {
+  N2d_core = matrix(nx1,ny1);
+  N2d_core(find(N2d == 0)) = NC;
+  N2d = N2d_core;
+}
+image(x1,y1,N2d);
+
+x = x1;
+y = y1;
+
+zbot = zc-0.5*h_pillar;
+ztop = zc+0.5*h_pillar;
+z = [zmin; zbot-t_substr*(1+din); zbot-t_substr; ztop-t_shell*(1+din); ztop-t_shell; zmax];    
+N = matrix(nx1,ny1,length(z));
+N(1:nx1,1:ny1,3) = N2d;
+N(1:nx1,1:ny1,4) = N2d;
+if (make_core == 1) {
+  N(1:nx1,1:ny1,1:2) = NC;
+} else {
+  N(1:nx1,1:ny1,5:length(z)) = NC;
+}
+matlabsave(filename,x,y,z,N);
+
+
+
